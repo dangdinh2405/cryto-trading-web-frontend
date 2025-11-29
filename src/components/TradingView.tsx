@@ -17,19 +17,6 @@ export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps
   const [prices, setPrices] = useState<any>({});
   const [timeframe, setTimeframe] = useState('1h');
 
-  useEffect(() => {
-    loadPrices();
-    const interval = setInterval(loadPrices, 5000); // Update every 5 seconds
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadPrices = async () => {
-    const response = await api.getMarketPrices();
-    if (response.data) {
-      setPrices(response.data);
-    }
-  };
-
   const currentPrice = prices[selectedSymbol]?.price || 0;
   const change24h = prices[selectedSymbol]?.change24h || 0;
   const isPositive = change24h >= 0;
@@ -40,7 +27,7 @@ export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <MarketSelector selectedSymbol={selectedSymbol} onSymbolChange={onSymbolChange} />
-          
+
           <div className="flex items-center gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Price</p>
@@ -73,11 +60,10 @@ export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
-              className={`px-3 py-1 rounded text-sm ${
-                timeframe === tf
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary hover:bg-secondary/80'
-              }`}
+              className={`px-3 py-1 rounded text-sm ${timeframe === tf
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary hover:bg-secondary/80'
+                }`}
             >
               {tf}
             </button>
@@ -92,7 +78,7 @@ export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps
           <Card className="h-[70%] p-4">
             <CandlestickChart symbol={selectedSymbol} timeframe={timeframe} />
           </Card>
-          
+
           <Card className="h-[28%] p-4">
             <Tabs defaultValue="orderbook">
               <TabsList>

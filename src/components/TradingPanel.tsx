@@ -50,7 +50,7 @@ export function TradingPanel({ symbol, currentPrice }: TradingPanelProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || parseFloat(amount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
@@ -140,10 +140,10 @@ export function TradingPanel({ symbol, currentPrice }: TradingPanelProps) {
 
             {orderType === 'market' && (
               <div className="space-y-2">
-                <Label>Market Price</Label>
+                {/* <Label>Market Price</Label>
                 <div className="p-2 bg-secondary rounded text-sm">
                   ${currentPrice.toLocaleString()}
-                </div>
+                </div> */}
               </div>
             )}
 
@@ -177,7 +177,7 @@ export function TradingPanel({ symbol, currentPrice }: TradingPanelProps) {
                   {availableBalance.toFixed(side === 'buy' ? 2 : 8)} {side === 'buy' ? 'USDT' : symbol}
                 </span>
               </div>
-              
+
               {amount && (
                 <>
                   <div className="flex justify-between">

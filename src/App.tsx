@@ -1,18 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { LoginForm } from './components/LoginForm';
 import { RegisterForm } from './components/RegisterForm';
 import { Dashboard } from './components/Dashboard';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Toaster } from './components/ui/sonner';
 
-function AppContent() {
+function RedirectLoggedIn({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const [showRegister, setShowRegister] = useState(false);
-
-  useEffect(() => {
-    // Set dark theme by default
-    document.documentElement.classList.add('dark');
-  }, []);
 
   if (isLoading) {
     return (
@@ -25,28 +21,67 @@ function AppContent() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="w-full max-w-4xl">
-          {showRegister ? (
-            <RegisterForm onSwitchToLogin={() => setShowRegister(false)} />
-          ) : (
-            <LoginForm onSwitchToRegister={() => setShowRegister(true)} />
-          )}
-        </div>
-      </div>
-    );
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <Dashboard />;
+  return <>{children}</>;
+}
+
+function AppContent() {
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+      <Route
+        path="/login"
+        element={
+          <RedirectLoggedIn>
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+              <div className="w-full max-w-4xl">
+                <LoginForm />
+              </div>
+            </div>
+          </RedirectLoggedIn>
+        }
+      />
+
+      <Route
+        path="/register"
+        element={
+          <RedirectLoggedIn>
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+              <div className="w-full max-w-4xl">
+                <RegisterForm />
+              </div>
+            </div>
+          </RedirectLoggedIn>
+        }
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-      <Toaster position="top-right" />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+        <Toaster position="top-right" />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

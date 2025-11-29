@@ -41,9 +41,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
+  // Auto-refresh token before expiration
+  useEffect(() => {
+    if (!user) return;
+
+    const checkAndRefreshToken = async () => {
+      if (api.isTokenExpiringSoon() && api.getRefreshToken()) {
+        console.log('[Auth] Token expiring soon, refreshing...');
+        const refreshed = await api.refreshAccessToken();
+        if (!refreshed) {
+          console.log('[Auth] Token refresh failed, logging out');
+          setUser(null);
+          api.clearTokens();
+        } else {
+          console.log('[Auth] Token refreshed successfully');
+        }
+      }
+    };
+
+    // Check every minute
+    const interval = setInterval(checkAndRefreshToken, 60000);
+
+    // Check immediately
+    checkAndRefreshToken();
+
+    // Check when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndRefreshToken();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   const login = async (usernameId: string, password: string) => {
     const response = await api.login(usernameId, password);
-    
+
     if (response.error) {
       return { success: false, error: response.error };
     }
@@ -59,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (userData: any) => {
     const response = await api.register(userData);
-    
+
     if (response.error) {
       return { success: false, error: response.error };
     }

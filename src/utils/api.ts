@@ -10,30 +10,39 @@ export interface ApiResponse<T = any> {
 class ApiClient {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private tokenExpiresAt: number | null = null;
 
   constructor() {
     // Load tokens from localStorage
     if (typeof window !== 'undefined') {
       this.accessToken = localStorage.getItem('accessToken');
       this.refreshToken = localStorage.getItem('refreshToken');
+      const expiresAt = localStorage.getItem('tokenExpiresAt');
+      this.tokenExpiresAt = expiresAt ? parseInt(expiresAt) : null;
     }
   }
 
-  setTokens(accessToken: string, refreshToken: string) {
+  setTokens(accessToken: string, refreshToken: string, expiresIn: number = 3600) {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
+    // Set expiration time (current time + expiresIn seconds, minus 5 minutes buffer)
+    this.tokenExpiresAt = Date.now() + (expiresIn - 300) * 1000;
+
     if (typeof window !== 'undefined') {
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('tokenExpiresAt', this.tokenExpiresAt.toString());
     }
   }
 
   clearTokens() {
     this.accessToken = null;
     this.refreshToken = null;
+    this.tokenExpiresAt = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('tokenExpiresAt');
     }
   }
 
@@ -41,9 +50,19 @@ class ApiClient {
     return this.accessToken;
   }
 
+  getRefreshToken() {
+    return this.refreshToken;
+  }
+
+  isTokenExpiringSoon(): boolean {
+    if (!this.tokenExpiresAt) return false;
+    // Check if token expires in less than 5 minutes
+    return Date.now() >= this.tokenExpiresAt;
+  }
+
   async request<T = any>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -100,10 +119,9 @@ class ApiClient {
 
       if (response.ok) {
         const data = await response.json();
-        this.accessToken = data.accessToken;
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('accessToken', data.accessToken);
-        }
+        // Update access token and expiration
+        const expiresIn = data.expiresIn || 3600;
+        this.setTokens(data.accessToken, this.refreshToken!, expiresIn);
         return true;
       } else {
         this.clearTokens();
@@ -139,7 +157,8 @@ class ApiClient {
     });
 
     if (response.data) {
-      this.setTokens(response.data.accessToken, response.data.refreshToken);
+      const expiresIn = response.data.expiresIn || 3600;
+      this.setTokens(response.data.accessToken, response.data.refreshToken, expiresIn);
     }
 
     return response;

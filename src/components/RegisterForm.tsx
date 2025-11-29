@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -7,12 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Alert, AlertDescription } from './ui/alert';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
 
-interface RegisterFormProps {
-  onSwitchToLogin: () => void;
-}
-
-export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
+export function RegisterForm() {
   const { register } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -54,11 +52,13 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
     const { confirmPassword, ...registerData } = formData;
     const result = await register(registerData);
-    
+
     if (!result.success) {
       setError(result.error || 'Registration failed');
+    } else {
+      navigate('/dashboard');
     }
-    
+
     setIsLoading(false);
   };
 
@@ -214,7 +214,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
           <div className="text-center">
             <button
               type="button"
-              onClick={onSwitchToLogin}
+              onClick={() => navigate('/login')}
               className="text-sm text-primary hover:underline"
             >
               Already have an account? Login
