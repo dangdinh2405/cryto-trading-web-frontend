@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { api } from '../utils/api';
+import { useMarketPrices } from '../hooks/useMarketPrices';
 
 interface MarketSelectorProps {
   selectedSymbol: string;
@@ -8,20 +8,13 @@ interface MarketSelectorProps {
 }
 
 export function MarketSelector({ selectedSymbol, onSymbolChange }: MarketSelectorProps) {
-  const [prices, setPrices] = useState<any>({});
-
-  useEffect(() => {
-    loadPrices();
-  }, []);
-
-  const loadPrices = async () => {
-    const response = await api.getMarketPrices();
-    if (response.data) {
-      setPrices(response.data);
-    }
-  };
-
+  const { prices } = useMarketPrices();
   const markets = ['BTC', 'ETH', 'SOL', 'BNB'];
+
+  // Subscribe to all markets for price display
+  useEffect(() => {
+    // Prices are automatically subscribed via TradingView
+  }, []);
 
   return (
     <Select value={selectedSymbol} onValueChange={onSymbolChange}>
@@ -30,8 +23,11 @@ export function MarketSelector({ selectedSymbol, onSymbolChange }: MarketSelecto
       </SelectTrigger>
       <SelectContent>
         {markets.map((symbol) => {
-          const price = prices[symbol]?.price || 0;
-          const change = prices[symbol]?.change24h || 0;
+          const marketPrice = prices[symbol];
+          const price = marketPrice?.close || 0;
+          const change = marketPrice
+            ? ((marketPrice.close - marketPrice.open) / marketPrice.open) * 100
+            : 0;
           const isPositive = change >= 0;
 
           return (

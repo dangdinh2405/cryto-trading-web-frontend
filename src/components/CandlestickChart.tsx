@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createChart } from 'lightweight-charts';
 
 declare global {
@@ -13,8 +13,8 @@ interface CandlestickChartProps {
 }
 
 // API Configuration
-const API_BASE = "http://localhost:8080";
-const WS_BASE = "ws://localhost:8080";
+const API_BASE = "http://localhost:5001";
+const WS_BASE = "ws://localhost:5001";
 const INITIAL_CANDLE_LIMIT = 500;
 
 interface BarData {
@@ -37,8 +37,11 @@ async function fetchCandles({
   limit: number;
   endTime?: number; // unix seconds
 }): Promise<BarData[]> {
+  // Ensure symbol has USDT suffix for database lookup
+  const dbSymbol = symbol.includes('USDT') ? symbol : `${symbol}USDT`;
+
   const params = new URLSearchParams({
-    symbol,
+    symbol: dbSymbol,
     interval,
     limit: String(limit),
   });
@@ -50,14 +53,25 @@ async function fetchCandles({
   if (!res.ok) throw new Error("Failed to fetch candles");
   const json = await res.json();
 
-  return (json.candles || []).map((c: any) => ({
-    time: Math.floor(new Date(c.openTime).getTime() / 1000),
-    open: Number(c.open),
-    high: Number(c.high),
-    low: Number(c.low),
-    close: Number(c.close),
-    volume: Number(c.volume),
-  }));
+  const candles = (json.candles || [])
+    .map((c: any) => {
+      // Backend might use snake_case (open_time) or camelCase (openTime)
+      const openTimeStr = c.open_time || c.openTime;
+      const time = Math.floor(new Date(openTimeStr).getTime() / 1000);
+
+      return {
+        time,
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume || 0),
+      };
+    })
+    .filter((bar: BarData) => !isNaN(bar.time)) // Remove invalid times
+    .sort((a: BarData, b: BarData) => a.time - b.time); // Sort ascending
+
+  return candles;
 }
 
 export function CandlestickChart({ symbol, timeframe }: CandlestickChartProps) {
@@ -123,13 +137,12 @@ export function CandlestickChart({ symbol, timeframe }: CandlestickChartProps) {
           limit: INITIAL_CANDLE_LIMIT,
         });
 
-        const ordered = history.slice().reverse();
+        // Data is already sorted ascending by time from fetchCandles
+        candleSeries.setData(history);
 
-        candleSeries.setData(ordered);
-
-        if (ordered.length > 0) {
-          const first = ordered[0];
-          const last = ordered[ordered.length - 1];
+        if (history.length > 0) {
+          const first = history[0];
+          const last = history[history.length - 1];
           oldestTimeRef.current = first.time;
 
           setCurrentPrice(last.close);
@@ -160,13 +173,11 @@ export function CandlestickChart({ symbol, timeframe }: CandlestickChartProps) {
           });
 
           if (more.length > 0) {
-            const orderedMore = more.slice().reverse();
-            const currentData = candleSeries.data();
-
-            const merged = [...orderedMore, ...currentData];
+            const currentData = candleSeries.data() as BarData[];
+            const merged = [...more, ...currentData];
             candleSeries.setData(merged);
 
-            oldestTimeRef.current = orderedMore[0].time;
+            oldestTimeRef.current = more[0].time;
           }
         } catch (e) {
           console.error("load more failed:", e);
@@ -195,49 +206,73 @@ export function CandlestickChart({ symbol, timeframe }: CandlestickChartProps) {
   useEffect(() => {
     if (!isLibraryLoaded) return;
 
-    const ws = new WebSocket(`${WS_BASE}/ws/market?symbol=${symbol}&interval=${timeframe}`);
+    const ws = new WebSocket(`${WS_BASE}/ws/market-prices`);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("[WS] connected");
+      console.log("[CandlestickChart] connected");
       setIsConnected(true);
+
+      // Subscribe to symbol for price updates
+      ws.send(JSON.stringify({
+        type: 'subscribe',
+        symbols: [symbol]
+      }));
     };
 
     ws.onclose = () => {
-      console.log("[WS] disconnected");
+      console.log("[CandlestickChart] disconnected");
       setIsConnected(false);
     };
 
     ws.onerror = (err) => {
-      console.error("[WS] error", err);
+      console.error("[CandlestickChart] error", err);
       setIsConnected(false);
     };
 
     ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data);
+        const data = JSON.parse(event.data);
 
-        if (msg.type === "candle" && msg.candle) {
-          const bar: BarData = msg.candle;
+        // data is array of OHLCV candles
+        if (Array.isArray(data)) {
+          data.forEach(candle => {
+            if (candle.symbol === symbol) {
+              const bar: BarData = {
+                time: Math.floor(new Date(candle.open_time).getTime() / 1000),
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+                volume: candle.volume
+              };
 
-          candleSeriesRef.current?.update(bar);
+              candleSeriesRef.current?.update(bar);
 
-          setCurrentPrice((prev) => {
-            setPrevPrice(prev);
-            return bar.close;
+              setCurrentPrice((prev) => {
+                setPrevPrice(prev);
+                return bar.close;
+              });
+            }
           });
         }
-
       } catch (e) {
-        console.error("ws parse error:", e);
+        console.error("[CandlestickChart] parse error:", e);
       }
     };
 
     return () => {
+      // Unsubscribe before closing
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'unsubscribe',
+          symbols: [symbol]
+        }));
+      }
       ws.close();
       wsRef.current = null;
     };
-  }, [isLibraryLoaded, symbol, timeframe]);
+  }, [isLibraryLoaded, symbol]);
 
   return (
     <div className="relative h-full w-full">

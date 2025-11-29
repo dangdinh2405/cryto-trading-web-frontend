@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { MarketProvider } from './contexts/MarketContext';
 import { LoginForm } from './components/LoginForm';
 import { RegisterForm } from './components/RegisterForm';
 import { Dashboard } from './components/Dashboard';
@@ -78,10 +79,12 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-        <Toaster position="top-right" />
-      </AuthProvider>
+      <MarketProvider>
+        <AuthProvider>
+          <AppContent />
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </MarketProvider>
     </BrowserRouter>
   );
 }

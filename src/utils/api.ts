@@ -225,6 +225,10 @@ class ApiClient {
     return this.request(`/market/trades/${symbol}`);
   }
 
+  async getMarkets() {
+    return this.request('/market/list');
+  }
+
   // Trading methods
   async placeOrder(orderData: {
     symbol: string;

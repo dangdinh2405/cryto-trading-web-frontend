@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { CandlestickChart } from './CandlestickChart';
 import { OrderBook } from './OrderBook';
 import { RecentTrades } from './RecentTrades';
@@ -6,7 +6,7 @@ import { TradingPanel } from './TradingPanel';
 import { MarketSelector } from './MarketSelector';
 import { Card } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { api } from '../utils/api';
+import { useMarketPrices } from '../hooks/useMarketPrices';
 
 interface TradingViewProps {
   selectedSymbol: string;
@@ -14,11 +14,24 @@ interface TradingViewProps {
 }
 
 export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps) {
-  const [prices, setPrices] = useState<any>({});
+  const { prices, isConnected, subscribe, unsubscribe } = useMarketPrices();
   const [timeframe, setTimeframe] = useState('1h');
 
-  const currentPrice = prices[selectedSymbol]?.price || 0;
-  const change24h = prices[selectedSymbol]?.change24h || 0;
+  // Subscribe to selected symbol's market price updates
+  useEffect(() => {
+    subscribe([selectedSymbol]);
+    return () => {
+      unsubscribe([selectedSymbol]);
+    };
+  }, [selectedSymbol, subscribe, unsubscribe]);
+
+  const currentMarketPrice = prices[selectedSymbol];
+  const currentPrice = currentMarketPrice?.close || 0;
+
+  // Calculate 24h change (approximation using price difference)
+  const change24h = currentMarketPrice
+    ? ((currentMarketPrice.close - currentMarketPrice.open) / currentMarketPrice.open) * 100
+    : 0;
   const isPositive = change24h >= 0;
 
   return (
@@ -29,27 +42,41 @@ export function TradingView({ selectedSymbol, onSymbolChange }: TradingViewProps
           <MarketSelector selectedSymbol={selectedSymbol} onSymbolChange={onSymbolChange} />
 
           <div className="flex items-center gap-4">
+            {/* Current Price */}
             <div>
               <p className="text-sm text-muted-foreground">Price</p>
-              <p className="text-2xl">${currentPrice.toLocaleString()}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl">${currentPrice.toLocaleString()}</p>
+                {isConnected && (
+                  <div className="size-2 rounded-full bg-green-500 animate-pulse" />
+                )}
+              </div>
             </div>
+
+            {/* 24h Change */}
             <div>
               <p className="text-sm text-muted-foreground">24h Change</p>
               <p className={`text-lg ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
                 {isPositive ? '+' : ''}{change24h.toFixed(2)}%
               </p>
             </div>
+
+            {/* 24h High */}
             <div>
               <p className="text-sm text-muted-foreground">24h High</p>
-              <p>${prices[selectedSymbol]?.high24h.toLocaleString() || 0}</p>
+              <p>${currentMarketPrice?.high.toLocaleString() || 0}</p>
             </div>
+
+            {/* 24h Low */}
             <div>
               <p className="text-sm text-muted-foreground">24h Low</p>
-              <p>${prices[selectedSymbol]?.low24h.toLocaleString() || 0}</p>
+              <p>${currentMarketPrice?.low.toLocaleString() || 0}</p>
             </div>
+
+            {/* 24h Volume */}
             <div>
               <p className="text-sm text-muted-foreground">24h Volume</p>
-              <p>${(prices[selectedSymbol]?.volume24h / 1000000).toFixed(2)}M</p>
+              <p>${(currentMarketPrice?.volume / 1000 || 0).toFixed(2)}K</p>
             </div>
           </div>
         </div>
